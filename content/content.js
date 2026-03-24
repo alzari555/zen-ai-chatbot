@@ -44,12 +44,20 @@
     let text = clone.innerText || clone.textContent || "";
     text = text.replace(/\n{3,}/g, "\n\n").trim();
 
-    // Cap at ~15000 chars to stay within API limits
+    return text;
+  }
+
+  function getTruncatedPageContent() {
+    let text = getPageContent();
+    let isTruncated = false;
+
+    // Cap at ~15000 chars to stay within API limits for default behavior
     if (text.length > 15000) {
       text = text.substring(0, 15000) + "\n\n[Content truncated...]";
+      isTruncated = true;
     }
 
-    return text;
+    return { text, isTruncated };
   }
 
   // Get page metadata
@@ -65,9 +73,14 @@
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     switch (message.type) {
       case "GET_PAGE_CONTENT":
-        const content = getPageContent();
+        const contentData = getTruncatedPageContent();
         const meta = getPageMeta();
-        sendResponse({ content, meta });
+        sendResponse({ content: contentData.text, meta: meta, isTruncated: contentData.isTruncated });
+        return true;
+
+      case "GET_FULL_PAGE_CONTENT":
+        const fullContent = getPageContent();
+        sendResponse({ content: fullContent, meta: getPageMeta() });
         return true;
 
       case "GET_SELECTION":

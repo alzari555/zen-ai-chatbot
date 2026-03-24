@@ -22,6 +22,7 @@
   const deepseekApiKeyInput = document.getElementById("deepseekApiKeyInput");
   const openRouterApiKeyInput = document.getElementById("openRouterApiKeyInput");
   const modelSelect = document.getElementById("modelSelect");
+  const compressorModelSelect = document.getElementById("compressorModelSelect");
   const toggleKeyVisibility = document.getElementById("toggleKeyVisibility");
   const toggleDeepseekKeyVisibility = document.getElementById("toggleDeepseekKeyVisibility");
   const toggleOpenRouterKeyVisibility = document.getElementById("toggleOpenRouterKeyVisibility");
@@ -29,6 +30,7 @@
   const saveStatus = document.getElementById("saveStatus");
   const contextBar = document.getElementById("contextBar");
   const contextText = document.getElementById("contextText");
+  const compressContextBtn = document.getElementById("compressContextBtn");
   const selectionBanner = document.getElementById("selectionBanner");
   const selectionText = document.getElementById("selectionText");
   const selectionDismiss = document.getElementById("selectionDismiss");
@@ -46,6 +48,7 @@
   // ===== Dynamic Models =====
   async function loadOpenRouterModels() {
     const group = document.getElementById("openRouterGroup");
+    const compressorGroup = document.getElementById("compressorOpenRouterGroup");
     if (!group) return;
 
     try {
@@ -57,6 +60,9 @@
         <option value="openrouter:openrouter/free">Auto (Free Models)</option>
         <option value="openrouter:openrouter/auto">Auto (Best Model)</option>
       `;
+      if (compressorGroup) {
+        compressorGroup.innerHTML = `<option value="openrouter:openrouter/free">Auto (Free Models)</option>`;
+      }
 
       // Sort models alphabetically
       const models = data.data.sort((a, b) => a.name.localeCompare(b.name));
@@ -73,12 +79,22 @@
         
         option.textContent = label;
         group.appendChild(option);
+        
+        if (compressorGroup) {
+          const compOption = document.createElement("option");
+          compOption.value = `openrouter:${model.id}`;
+          compOption.textContent = label;
+          compressorGroup.appendChild(compOption);
+        }
       });
       
       // Re-apply selected model in case the previously selected model was overridden during DOM reset
-      const result = await browser.storage.local.get("geminiModel");
+      const result = await browser.storage.local.get(["geminiModel", "compressorModel"]);
       if (result.geminiModel && result.geminiModel.startsWith("openrouter:")) {
         modelSelect.value = result.geminiModel;
+      }
+      if (result.compressorModel && result.compressorModel.startsWith("openrouter:")) {
+        compressorModelSelect.value = result.compressorModel;
       }
     } catch (e) {
       console.warn("Failed to load OpenRouter models dynamically", e);
@@ -120,7 +136,7 @@
   // ===== Settings =====
   async function loadSettings() {
     try {
-      const result = await browser.storage.local.get(["geminiApiKey", "deepseekApiKey", "openRouterApiKey", "geminiModel", "sidebarTheme"]);
+      const result = await browser.storage.local.get(["geminiApiKey", "deepseekApiKey", "openRouterApiKey", "geminiModel", "compressorModel", "sidebarTheme"]);
       if (result.geminiApiKey) {
         apiKeyInput.value = result.geminiApiKey;
       }
@@ -132,6 +148,9 @@
       }
       if (result.geminiModel) {
         modelSelect.value = result.geminiModel;
+      }
+      if (result.compressorModel) {
+        compressorModelSelect.value = result.compressorModel;
       }
       updateThemeButtons(result.sidebarTheme || "system");
     } catch (e) {
@@ -145,6 +164,7 @@
     const deepseekApiKey = deepseekApiKeyInput.value.trim();
     const openRouterApiKey = openRouterApiKeyInput.value.trim();
     const model = modelSelect.value;
+    const compModel = compressorModelSelect.value;
     const activeThemeBtn = document.querySelector(".theme-option.active");
     const theme = activeThemeBtn ? activeThemeBtn.dataset.themeValue : "system";
 
@@ -153,6 +173,7 @@
       deepseekApiKey: deepseekApiKey,
       openRouterApiKey: openRouterApiKey,
       geminiModel: model,
+      compressorModel: compModel,
       sidebarTheme: theme,
     });
 
@@ -175,11 +196,22 @@
       if (response?.pageContext?.meta?.title) {
         contextText.textContent = response.pageContext.meta.title;
         contextBar.title = response.pageContext.meta.url || "";
+        
+        if (response.pageContext.isCompressed) {
+          compressContextBtn.classList.add("hidden");
+          contextText.textContent += " (Compressed ⚡)";
+        } else if (response.pageContext.isTruncated) {
+          compressContextBtn.classList.remove("hidden");
+        } else {
+          compressContextBtn.classList.add("hidden");
+        }
       } else {
         contextText.textContent = "No page loaded";
+        if (compressContextBtn) compressContextBtn.classList.add("hidden");
       }
     } catch (e) {
       contextText.textContent = "No page loaded";
+      if (compressContextBtn) compressContextBtn.classList.add("hidden");
     }
   }
 
@@ -469,6 +501,33 @@
         applyTheme(btn.dataset.themeValue);
       });
     });
+
+    // Compress Context
+    if (compressContextBtn) {
+      compressContextBtn.addEventListener("click", async () => {
+        compressContextBtn.disabled = true;
+        const originalHtml = compressContextBtn.innerHTML;
+        compressContextBtn.innerHTML = "⏳";
+        
+        try {
+          const res = await browser.runtime.sendMessage({ type: "COMPRESS_PAGE_CONTEXT" });
+          if (res && res.success) {
+            updateContextBar();
+          } else {
+            console.warn("Compression failed", res?.error);
+            compressContextBtn.innerHTML = "⚠️";
+            setTimeout(() => { compressContextBtn.innerHTML = originalHtml; }, 2000);
+          }
+        } catch(e) {
+           console.error("Error compressing", e);
+           compressContextBtn.innerHTML = "❌";
+           setTimeout(() => { compressContextBtn.innerHTML = originalHtml; }, 2000);
+        } finally {
+          compressContextBtn.disabled = false;
+          if (compressContextBtn.innerHTML === "⏳") compressContextBtn.innerHTML = originalHtml;
+        }
+      });
+    }
 
     // Selection dismiss
     selectionDismiss.addEventListener("click", () => {

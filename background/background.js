@@ -8,14 +8,17 @@
   const DEEPSEEK_API_BASE = "https://api.deepseek.com/chat/completions";
   const OPENROUTER_API_BASE = "https://openrouter.ai/api/v1/chat/completions";
 
+  let pageSummaryCache = {}; // { [url]: "compressed context text..." }
+
   // Get App Config from storage
   async function getAppConfig() {
-    const result = await browser.storage.local.get(["geminiApiKey", "deepseekApiKey", "openRouterApiKey", "geminiModel"]);
+    const result = await browser.storage.local.get(["geminiApiKey", "deepseekApiKey", "openRouterApiKey", "geminiModel", "compressorModel"]);
     return {
       geminiApiKey: result.geminiApiKey || null,
       deepseekApiKey: result.deepseekApiKey || null,
       openRouterApiKey: result.openRouterApiKey || null,
       model: result.geminiModel || "gemini-2.5-flash",
+      compressorModel: result.compressorModel || "gemini-2.5-flash",
     };
   }
 
@@ -31,6 +34,16 @@
       const response = await browser.tabs.sendMessage(tabs[0].id, {
         type: "GET_PAGE_CONTENT",
       });
+
+      // Inject compressed summary if we have it
+      if (response && response.meta && response.meta.url) {
+        const cacheKey = response.meta.url.split('#')[0];
+        if (pageSummaryCache[cacheKey]) {
+          response.content = pageSummaryCache[cacheKey];
+          response.isCompressed = true;
+        }
+      }
+
       return response;
     } catch (e) {
       console.warn("Could not get page content:", e.message);
@@ -259,8 +272,63 @@
       return true;
     }
 
+    if (message.type === "COMPRESS_PAGE_CONTEXT") {
+      handleCompressContext().then(sendResponse);
+      return true;
+    }
+
     return false;
   });
+
+  async function handleCompressContext() {
+    try {
+      const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+      if (!tabs || tabs.length === 0) return { success: false, error: "No active tab" };
+
+      const fullContentResponse = await browser.tabs.sendMessage(tabs[0].id, {
+        type: "GET_FULL_PAGE_CONTENT",
+      });
+      
+      if (!fullContentResponse || !fullContentResponse.content || !fullContentResponse.meta) {
+         return { success: false, error: "Could not read page" };
+      }
+      
+      const url = fullContentResponse.meta.url;
+      const cacheKey = url.split('#')[0];
+      const fullText = fullContentResponse.content;
+
+      const config = await getAppConfig();
+      const isDeepseek = config.compressorModel.startsWith("deepseek");
+      const isOpenRouter = config.compressorModel.startsWith("openrouter:");
+      let actualModel = config.compressorModel;
+      if (isOpenRouter) actualModel = config.compressorModel.replace("openrouter:", "");
+
+      const systemPrompt = "You are a highly efficient text compressor and summarizer. Please take the following raw web page content and produce a highly compressed, dense summary. Retain all hard facts, key concepts, instructions, and context necessary for an AI assistant to answer questions about this page. Output ONLY the summary text.";
+      
+      let summaryText = "";
+      const streamCallback = (chunk) => { summaryText += chunk; };
+      
+      if (isDeepseek) {
+        if (!config.deepseekApiKey) return { success: false, error: "Missing API key" };
+        await streamOpenAICompatibleResponse(DEEPSEEK_API_BASE, config.deepseekApiKey, actualModel, systemPrompt, fullText, [], streamCallback);
+      } else if (isOpenRouter) {
+        if (!config.openRouterApiKey) return { success: false, error: "Missing API key" };
+        await streamOpenAICompatibleResponse(OPENROUTER_API_BASE, config.openRouterApiKey, actualModel, systemPrompt, fullText, [], streamCallback);
+      } else {
+        if (!config.geminiApiKey) return { success: false, error: "Missing API key" };
+        await streamGeminiResponse(config.geminiApiKey, actualModel, systemPrompt, fullText, [], streamCallback);
+      }
+
+      if (summaryText) {
+        pageSummaryCache[cacheKey] = "--- COMPRESSED CONTEXT ---\n" + summaryText;
+        return { success: true };
+      }
+      return { success: false, error: "Empty summary returned" };
+
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
 
   async function handleGetContext() {
     const pageContext = await getPageContext();

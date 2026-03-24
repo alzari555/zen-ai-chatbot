@@ -100,6 +100,11 @@
         </svg>
       </div>
       <span class="context-text" id="contextText">No page loaded</span>
+      <button class="icon-btn hidden" id="compressContextBtn" title="Compress long page into context" style="margin-left: auto; padding: 2px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+        </svg>
+      </button>
     </div>
 
     <!-- Input area -->
@@ -188,6 +193,19 @@
               <option value="gemini-2.5-pro">Gemini Pro (Always latest)</option>
               <option value="gemini-2.5-flash">Gemini Flash (Always latest)</option>
               <option value="gemini-2.5-flash-lite">Gemini Flash Lite (Always latest)</option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="setting-group">
+          <label for="compressorModelSelect">Context Compressor Model</label>
+          <p class="setting-hint">Model used to compress long pages (⚡). A free/fast model is recommended.</p>
+          <select id="compressorModelSelect">
+            <optgroup label="OpenRouter" id="compressorOpenRouterGroup">
+              <option value="openrouter:openrouter/free">Auto (Free Models)</option>
+            </optgroup>
+            <optgroup label="Gemini">
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+              <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
             </optgroup>
           </select>
         </div>

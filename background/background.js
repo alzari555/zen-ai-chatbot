@@ -288,11 +288,11 @@
       const fullContentResponse = await browser.tabs.sendMessage(tabs[0].id, {
         type: "GET_FULL_PAGE_CONTENT",
       });
-      
+
       if (!fullContentResponse || !fullContentResponse.content || !fullContentResponse.meta) {
-         return { success: false, error: "Could not read page" };
+        return { success: false, error: "Could not read page" };
       }
-      
+
       const url = fullContentResponse.meta.url;
       const cacheKey = url.split('#')[0];
       const fullText = fullContentResponse.content;
@@ -304,10 +304,10 @@
       if (isOpenRouter) actualModel = config.compressorModel.replace("openrouter:", "");
 
       const systemPrompt = "You are a highly efficient text compressor and summarizer. Please take the following raw web page content and produce a highly compressed, dense summary. Retain all hard facts, key concepts, instructions, and context necessary for an AI assistant to answer questions about this page. Output ONLY the summary text.";
-      
+
       let summaryText = "";
       const streamCallback = (chunk) => { summaryText += chunk; };
-      
+
       if (isDeepseek) {
         if (!config.deepseekApiKey) return { success: false, error: "Missing API key" };
         await streamOpenAICompatibleResponse(DEEPSEEK_API_BASE, config.deepseekApiKey, actualModel, systemPrompt, fullText, [], streamCallback);

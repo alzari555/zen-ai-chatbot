@@ -30,6 +30,7 @@
   const saveStatus = document.getElementById("saveStatus");
   const contextBar = document.getElementById("contextBar");
   const contextText = document.getElementById("contextText");
+  const inspectContextBtn = document.getElementById("inspectContextBtn");
   const compressContextBtn = document.getElementById("compressContextBtn");
   const selectionBanner = document.getElementById("selectionBanner");
   const selectionText = document.getElementById("selectionText");
@@ -197,6 +198,8 @@
         contextText.textContent = response.pageContext.meta.title;
         contextBar.title = response.pageContext.meta.url || "";
         
+        if (inspectContextBtn) inspectContextBtn.classList.remove("hidden");
+
         if (response.pageContext.isCompressed) {
           compressContextBtn.classList.add("hidden");
           contextText.textContent += " (Compressed ⚡)";
@@ -208,10 +211,12 @@
       } else {
         contextText.textContent = "No page loaded";
         if (compressContextBtn) compressContextBtn.classList.add("hidden");
+        if (inspectContextBtn) inspectContextBtn.classList.add("hidden");
       }
     } catch (e) {
       contextText.textContent = "No page loaded";
       if (compressContextBtn) compressContextBtn.classList.add("hidden");
+      if (inspectContextBtn) inspectContextBtn.classList.add("hidden");
     }
   }
 
@@ -526,6 +531,39 @@
           compressContextBtn.disabled = false;
           if (compressContextBtn.innerHTML === "⏳") compressContextBtn.innerHTML = originalHtml;
         }
+      });
+    }
+
+    // Inspect Context Debugging
+    const contextDebugModal = document.getElementById("contextDebugModal");
+    const contextDebugClose = document.getElementById("contextDebugClose");
+    const contextViewArea = document.getElementById("contextViewArea");
+
+    if (inspectContextBtn) {
+      inspectContextBtn.addEventListener("click", async () => {
+        try {
+          const response = await browser.runtime.sendMessage({ type: "GET_CONTEXT" });
+          if (response?.pageContext?.content) {
+            contextViewArea.value = response.pageContext.content;
+            contextDebugModal.classList.remove("hidden");
+          } else {
+            alert("No context data available.");
+          }
+        } catch(e) {
+          alert("Error fetching context: " + e.message);
+        }
+      });
+    }
+
+    if (contextDebugClose) {
+      contextDebugClose.addEventListener("click", () => {
+        contextDebugModal.classList.add("hidden");
+      });
+    }
+
+    if (contextDebugModal) {
+      contextDebugModal.addEventListener("click", (e) => {
+        if (e.target === contextDebugModal) contextDebugModal.classList.add("hidden");
       });
     }
 

@@ -20,9 +20,11 @@
   const settingsClose = document.getElementById("settingsClose");
   const apiKeyInput = document.getElementById("apiKeyInput");
   const deepseekApiKeyInput = document.getElementById("deepseekApiKeyInput");
+  const openRouterApiKeyInput = document.getElementById("openRouterApiKeyInput");
   const modelSelect = document.getElementById("modelSelect");
   const toggleKeyVisibility = document.getElementById("toggleKeyVisibility");
   const toggleDeepseekKeyVisibility = document.getElementById("toggleDeepseekKeyVisibility");
+  const toggleOpenRouterKeyVisibility = document.getElementById("toggleOpenRouterKeyVisibility");
   const saveSettingsBtn = document.getElementById("saveSettings");
   const saveStatus = document.getElementById("saveStatus");
   const contextBar = document.getElementById("contextBar");
@@ -38,6 +40,49 @@
     loadSettings();
     updateContextBar();
     setupEventListeners();
+    loadOpenRouterModels();
+  }
+
+  // ===== Dynamic Models =====
+  async function loadOpenRouterModels() {
+    const group = document.getElementById("openRouterGroup");
+    if (!group) return;
+
+    try {
+      const response = await fetch("https://openrouter.ai/api/v1/models");
+      const data = await response.json();
+      
+      // Preserve the auto options and reset the rest
+      group.innerHTML = `
+        <option value="openrouter:openrouter/free">Auto (Free Models)</option>
+        <option value="openrouter:openrouter/auto">Auto (Best Model)</option>
+      `;
+
+      // Sort models alphabetically
+      const models = data.data.sort((a, b) => a.name.localeCompare(b.name));
+      
+      models.forEach(model => {
+        const option = document.createElement("option");
+        option.value = `openrouter:${model.id}`;
+        
+        let label = model.name;
+        // Optionally flag models that are completely free based on OpenRouter response structure
+        if (model.pricing && (model.pricing.prompt === "0" || model.pricing.prompt === 0) && (model.pricing.completion === "0" || model.pricing.completion === 0)) {
+          label += " (Free)";
+        }
+        
+        option.textContent = label;
+        group.appendChild(option);
+      });
+      
+      // Re-apply selected model in case the previously selected model was overridden during DOM reset
+      const result = await browser.storage.local.get("geminiModel");
+      if (result.geminiModel && result.geminiModel.startsWith("openrouter:")) {
+        modelSelect.value = result.geminiModel;
+      }
+    } catch (e) {
+      console.warn("Failed to load OpenRouter models dynamically", e);
+    }
   }
 
   // ===== Theme =====
@@ -75,12 +120,15 @@
   // ===== Settings =====
   async function loadSettings() {
     try {
-      const result = await browser.storage.local.get(["geminiApiKey", "deepseekApiKey", "geminiModel", "sidebarTheme"]);
+      const result = await browser.storage.local.get(["geminiApiKey", "deepseekApiKey", "openRouterApiKey", "geminiModel", "sidebarTheme"]);
       if (result.geminiApiKey) {
         apiKeyInput.value = result.geminiApiKey;
       }
       if (result.deepseekApiKey) {
         deepseekApiKeyInput.value = result.deepseekApiKey;
+      }
+      if (result.openRouterApiKey) {
+        openRouterApiKeyInput.value = result.openRouterApiKey;
       }
       if (result.geminiModel) {
         modelSelect.value = result.geminiModel;
@@ -95,6 +143,7 @@
   async function saveSettings() {
     const apiKey = apiKeyInput.value.trim();
     const deepseekApiKey = deepseekApiKeyInput.value.trim();
+    const openRouterApiKey = openRouterApiKeyInput.value.trim();
     const model = modelSelect.value;
     const activeThemeBtn = document.querySelector(".theme-option.active");
     const theme = activeThemeBtn ? activeThemeBtn.dataset.themeValue : "system";
@@ -102,6 +151,7 @@
     await browser.storage.local.set({
       geminiApiKey: apiKey,
       deepseekApiKey: deepseekApiKey,
+      openRouterApiKey: openRouterApiKey,
       geminiModel: model,
       sidebarTheme: theme,
     });
@@ -298,7 +348,7 @@
       requestId,
       userMessage: text || "",
       action: action,
-      conversationHistory: conversationHistory.slice(-10), // Keep last 10 messages
+      conversationHistory: conversationHistory.slice(-100), // Keep last 100 messages
     });
 
     // Listen for streamed response
@@ -406,6 +456,9 @@
     });
     toggleDeepseekKeyVisibility.addEventListener("click", () => {
       deepseekApiKeyInput.type = deepseekApiKeyInput.type === "password" ? "text" : "password";
+    });
+    toggleOpenRouterKeyVisibility.addEventListener("click", () => {
+      openRouterApiKeyInput.type = openRouterApiKeyInput.type === "password" ? "text" : "password";
     });
 
     // Theme toggle buttons

@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Zen AI Sidebar",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "AI-powered sidebar for Zen Browser using Gemini API. Summarize pages, explain selections, and ask contextual questions.",
   "icons": {
     "48": "icons/icon-48.png",

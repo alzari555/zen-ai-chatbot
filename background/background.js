@@ -6,14 +6,16 @@
 
   const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
   const DEEPSEEK_API_BASE = "https://api.deepseek.com/chat/completions";
+  const OPENROUTER_API_BASE = "https://openrouter.ai/api/v1/chat/completions";
 
   // Get App Config from storage
   async function getAppConfig() {
-    const result = await browser.storage.local.get(["geminiApiKey", "deepseekApiKey", "geminiModel"]);
+    const result = await browser.storage.local.get(["geminiApiKey", "deepseekApiKey", "openRouterApiKey", "geminiModel"]);
     return {
       geminiApiKey: result.geminiApiKey || null,
       deepseekApiKey: result.deepseekApiKey || null,
-      model: result.geminiModel || "gemini-2.5-flash",
+      openRouterApiKey: result.openRouterApiKey || null,
+      model: result.geminiModel || "gemini-flash",
     };
   }
 
@@ -107,7 +109,7 @@
       contents: contents,
       generationConfig: {
         temperature: 0.7,
-        maxOutputTokens: 4096,
+        maxOutputTokens: 8192,
       },
     };
 
@@ -160,8 +162,8 @@
     return fullResponse;
   }
 
-  // Stream response from Deepseek API
-  async function streamDeepseekResponse(apiKey, model, systemPrompt, userMessage, conversationHistory, sendChunk) {
+  // Stream response from OpenAI-Compatible API (Deepseek, OpenRouter)
+  async function streamOpenAICompatibleResponse(apiBase, apiKey, model, systemPrompt, userMessage, conversationHistory, sendChunk) {
     const contents = [];
     
     // Add system prompt
@@ -182,10 +184,10 @@
       messages: contents,
       stream: true,
       temperature: 0.7,
-      max_tokens: 4096,
+      max_tokens: 8192,
     };
 
-    const response = await fetch(DEEPSEEK_API_BASE, {
+    const response = await fetch(apiBase, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -196,7 +198,7 @@
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(`Deepseek API error (${response.status}): ${error}`);
+      throw new Error(`API error (${response.status}): ${error}`);
     }
 
     const reader = response.body.getReader();
@@ -273,6 +275,12 @@
     try {
       const config = await getAppConfig();
       const isDeepseek = config.model.startsWith("deepseek");
+      const isOpenRouter = config.model.startsWith("openrouter:");
+      
+      let actualModel = config.model;
+      if (isOpenRouter) {
+        actualModel = config.model.replace("openrouter:", "");
+      }
       
       if (isDeepseek && !config.deepseekApiKey) {
         browser.runtime.sendMessage({
@@ -282,7 +290,15 @@
           message: "Please set your Deepseek API key in the sidebar settings.",
         });
         return;
-      } else if (!isDeepseek && !config.geminiApiKey) {
+      } else if (isOpenRouter && !config.openRouterApiKey) {
+        browser.runtime.sendMessage({
+          type: "CHAT_RESPONSE",
+          requestId,
+          error: "NO_API_KEY",
+          message: "Please set your OpenRouter API key in the sidebar settings.",
+        });
+        return;
+      } else if (!isDeepseek && !isOpenRouter && !config.geminiApiKey) {
         browser.runtime.sendMessage({
           type: "CHAT_RESPONSE",
           requestId,
@@ -324,9 +340,11 @@
       };
       
       if (isDeepseek) {
-        await streamDeepseekResponse(config.deepseekApiKey, config.model, systemPrompt, finalMessage, conversationHistory, streamCallback);
+        await streamOpenAICompatibleResponse(DEEPSEEK_API_BASE, config.deepseekApiKey, actualModel, systemPrompt, finalMessage, conversationHistory, streamCallback);
+      } else if (isOpenRouter) {
+        await streamOpenAICompatibleResponse(OPENROUTER_API_BASE, config.openRouterApiKey, actualModel, systemPrompt, finalMessage, conversationHistory, streamCallback);
       } else {
-        await streamGeminiResponse(config.geminiApiKey, config.model, systemPrompt, finalMessage, conversationHistory, streamCallback);
+        await streamGeminiResponse(config.geminiApiKey, actualModel, systemPrompt, finalMessage, conversationHistory, streamCallback);
       }
 
       // Signal completion

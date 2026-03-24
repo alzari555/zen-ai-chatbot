@@ -165,7 +165,7 @@
   // Stream response from OpenAI-Compatible API (Deepseek, OpenRouter)
   async function streamOpenAICompatibleResponse(apiBase, apiKey, model, systemPrompt, userMessage, conversationHistory, sendChunk) {
     const contents = [];
-    
+
     // Add system prompt
     if (systemPrompt) {
       contents.push({ role: "system", content: systemPrompt });
@@ -245,7 +245,7 @@
           type: "SELECTION_UPDATE",
           selection: message.selection,
         })
-        .catch(() => {});
+        .catch(() => { });
       return false;
     }
 
@@ -276,12 +276,12 @@
       const config = await getAppConfig();
       const isDeepseek = config.model.startsWith("deepseek");
       const isOpenRouter = config.model.startsWith("openrouter:");
-      
+
       let actualModel = config.model;
       if (isOpenRouter) {
         actualModel = config.model.replace("openrouter:", "");
       }
-      
+
       if (isDeepseek && !config.deepseekApiKey) {
         browser.runtime.sendMessage({
           type: "CHAT_RESPONSE",
@@ -336,9 +336,9 @@
           requestId,
           chunk,
           done: false,
-        }).catch(() => {});
+        }).catch(() => { });
       };
-      
+
       if (isDeepseek) {
         await streamOpenAICompatibleResponse(DEEPSEEK_API_BASE, config.deepseekApiKey, actualModel, systemPrompt, finalMessage, conversationHistory, streamCallback);
       } else if (isOpenRouter) {
@@ -352,14 +352,14 @@
         type: "CHAT_RESPONSE",
         requestId,
         done: true,
-      }).catch(() => {});
+      }).catch(() => { });
     } catch (error) {
       browser.runtime.sendMessage({
         type: "CHAT_RESPONSE",
         requestId,
         error: "API_ERROR",
         message: error.message,
-      }).catch(() => {});
+      }).catch(() => { });
     }
   }
 })();

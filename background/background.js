@@ -15,7 +15,7 @@
       geminiApiKey: result.geminiApiKey || null,
       deepseekApiKey: result.deepseekApiKey || null,
       openRouterApiKey: result.openRouterApiKey || null,
-      model: result.geminiModel || "gemini-flash",
+      model: result.geminiModel || "gemini-2.5-flash",
     };
   }
 

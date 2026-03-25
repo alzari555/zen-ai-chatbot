@@ -233,21 +233,33 @@
   }
 
   // ===== Messages =====
-  function addUserMessage(text) {
+  function addUserMessage(text, id = null) {
     // Remove welcome message
     const welcome = messagesArea.querySelector(".welcome-message");
     if (welcome) welcome.remove();
 
+    const msgId = id || Date.now().toString() + Math.random().toString(36).substr(2, 5);
     const div = document.createElement("div");
     div.className = "message message-user";
-    div.innerHTML = `<div class="message-content">${escapeHtml(text)}</div>`;
+    div.dataset.id = msgId;
+    div.innerHTML = `
+      <div class="message-content">${escapeHtml(text)}</div>
+      <div class="message-actions">
+        <button class="msg-action-btn edit-msg-btn" title="Edit message">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+        </button>
+      </div>
+    `;
     messagesArea.appendChild(div);
     scrollToBottom();
+    return msgId;
   }
 
-  function addAiMessage() {
+  function addAiMessage(id = null) {
+    const msgId = id || Date.now().toString() + Math.random().toString(36).substr(2, 5);
     const div = document.createElement("div");
     div.className = "message message-ai";
+    div.dataset.id = msgId;
     div.innerHTML = `
       <span class="message-label">Zen AI</span>
       <div class="message-content">
@@ -255,10 +267,18 @@
           <span></span><span></span><span></span>
         </div>
       </div>
+      <div class="message-actions hidden">
+        <button class="msg-action-btn copy-msg-btn" title="Copy response">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        </button>
+        <button class="msg-action-btn regen-msg-btn" title="Regenerate response">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+        </button>
+      </div>
     `;
     messagesArea.appendChild(div);
     scrollToBottom();
-    return div.querySelector(".message-content");
+    return { contentEl: div.querySelector(".message-content"), msgId: msgId, container: div };
   }
 
   function addErrorMessage(text) {
@@ -356,9 +376,12 @@
     const requestId = ++currentRequestId;
 
     // Display user message (for typed messages)
+    let userMsgId = null;
+    let originalText = text;
+    
     if (text && !action) {
-      addUserMessage(text);
-      conversationHistory.push({ role: "user", text: text });
+      userMsgId = addUserMessage(text);
+      conversationHistory.push({ role: "user", text: text, id: userMsgId });
     } else if (action) {
       const actionLabels = {
         summarize: "📄 Summarize this page",
@@ -367,11 +390,13 @@
           : "💡 Explain this page",
         keypoints: "📋 Extract key points",
       };
-      addUserMessage(actionLabels[action] || action);
+      originalText = actionLabels[action] || action;
+      userMsgId = addUserMessage(originalText);
+      conversationHistory.push({ role: "user", text: originalText, id: userMsgId });
     }
 
     // Create AI response container
-    const aiContent = addAiMessage();
+    const { contentEl: aiContent, msgId: aiMsgId, container: aiContainer } = addAiMessage();
     let fullResponse = "";
 
     // Clear input
@@ -417,7 +442,8 @@
 
       if (msg.done) {
         isStreaming = false;
-        conversationHistory.push({ role: "model", text: fullResponse });
+        conversationHistory.push({ role: "model", text: fullResponse, id: aiMsgId });
+        aiContainer.querySelector('.message-actions').classList.remove('hidden');
         browser.runtime.onMessage.removeListener(responseHandler);
       }
     }
@@ -576,6 +602,123 @@
     browser.runtime.onMessage.addListener((msg) => {
       if (msg.type === "SELECTION_UPDATE") {
         updateSelectionBanner(msg.selection);
+      }
+    });
+
+    // Message Action Buttons (Edit, Copy, Regenerate)
+    messagesArea.addEventListener("click", (e) => {
+      const btn = e.target.closest(".msg-action-btn");
+      if (!btn) return;
+      
+      const messageEl = btn.closest(".message");
+      const msgId = messageEl.dataset.id;
+      if (!msgId) return;
+
+      if (btn.classList.contains("copy-msg-btn")) {
+        // Copy logic
+        const historyItem = conversationHistory.find(item => item.id === msgId);
+        if (historyItem) {
+          navigator.clipboard.writeText(historyItem.text).then(() => {
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="#2ecc71" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+            setTimeout(() => btn.innerHTML = originalHtml, 2000);
+          });
+        }
+      } 
+      else if (btn.classList.contains("edit-msg-btn")) {
+        // Edit user message logic
+        if (isStreaming) return;
+        const msgIndex = conversationHistory.findIndex(item => item.id === msgId);
+        if (msgIndex !== -1) {
+          const historyItem = conversationHistory[msgIndex];
+          chatInput.value = historyItem.text;
+          chatInput.style.height = "auto";
+          chatInput.style.height = Math.min(chatInput.scrollHeight, 100) + "px";
+          updateSendButton();
+          
+          // Delete this message and all subsequent from DOM
+          let currentEl = messageEl;
+          while (currentEl) {
+            const nextEl = currentEl.nextElementSibling;
+            currentEl.remove();
+            currentEl = nextEl;
+          }
+          
+          // Truncate history
+          conversationHistory = conversationHistory.slice(0, msgIndex);
+        }
+      }
+      else if (btn.classList.contains("regen-msg-btn")) {
+        // Regenerate AI response logic
+        if (isStreaming) return;
+        const msgIndex = conversationHistory.findIndex(item => item.id === msgId);
+        if (msgIndex !== -1) {
+          // Find the last user message before this AI message
+          let lastUserMessageText = "";
+          for (let i = msgIndex - 1; i >= 0; i--) {
+            if (conversationHistory[i].role === "user") {
+              lastUserMessageText = conversationHistory[i].text;
+              break;
+            }
+          }
+          
+          if (lastUserMessageText) {
+            // Delete this AI message and all subsequent from DOM
+            let currentEl = messageEl;
+            while (currentEl) {
+              const nextEl = currentEl.nextElementSibling;
+              currentEl.remove();
+              currentEl = nextEl;
+            }
+            // Truncate history
+            conversationHistory = conversationHistory.slice(0, msgIndex);
+            
+            // Re-trigger send message silently (without creating a new user bubble)
+            // But we actually *want* to just trigger the AI generation
+            // The simplest way to perfectly maintain state is to pop the history and re-send.
+            // Since `sendMessage` adds a user bubble, we can bypass that by passing it directly to the background,
+            // OR we can just edit the DOM to show the loading bubble and call background script directly.
+            
+            isStreaming = true;
+            const requestId = ++currentRequestId;
+            const { contentEl: aiContent, msgId: newAiMsgId, container: aiContainer } = addAiMessage();
+            
+            browser.runtime.sendMessage({
+              type: "CHAT_REQUEST",
+              requestId,
+              userMessage: lastUserMessageText,
+              action: null,
+              conversationHistory: conversationHistory.slice(-100),
+            });
+            
+            // Re-use logic for streamed response
+            let fullResponse = "";
+            const responseHandler = (msg) => {
+              if (msg.type !== "CHAT_RESPONSE" || msg.requestId !== requestId) return;
+              if (msg.error) {
+                aiContent.closest(".message").classList.add("message-error");
+                aiContent.innerHTML = renderMarkdown(msg.message || "An error occurred.");
+                isStreaming = false;
+                browser.runtime.onMessage.removeListener(responseHandler);
+                return;
+              }
+              if (msg.chunk) {
+                const typingIndicator = aiContent.querySelector(".typing-indicator");
+                if (typingIndicator) typingIndicator.remove();
+                fullResponse += msg.chunk;
+                aiContent.innerHTML = renderMarkdown(fullResponse);
+                scrollToBottom();
+              }
+              if (msg.done) {
+                isStreaming = false;
+                conversationHistory.push({ role: "model", text: fullResponse, id: newAiMsgId });
+                aiContainer.querySelector('.message-actions').classList.remove('hidden');
+                browser.runtime.onMessage.removeListener(responseHandler);
+              }
+            };
+            browser.runtime.onMessage.addListener(responseHandler);
+          }
+        }
       }
     });
 

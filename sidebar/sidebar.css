@@ -221,8 +221,12 @@ body {
 
 /* Message bubbles */
 .message {
-  margin-bottom: 20px;
+  position: relative;
+  margin-bottom: 24px;   /* Increased to make room for absolute buttons */
+  padding-bottom: 24px;  /* Extend bounding box downward so hover doesn't break */
   animation: messageIn 0.2s ease;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 @keyframes messageIn {
@@ -265,6 +269,60 @@ body {
   line-height: 1.6;
   word-wrap: break-word;
   color: var(--text-primary);
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Message Actions (Hover Menu) */
+.message-actions {
+  display: flex;
+  gap: 4px;
+  position: absolute;
+  bottom: 0px; /* Inside the padding-bottom area */
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 2px 4px;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.message:hover .message-actions {
+  opacity: 1;
+}
+
+.message-user .message-actions {
+  right: 14px;
+}
+
+.message-ai .message-actions {
+  left: 2px;
+}
+
+.msg-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.msg-action-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.msg-action-btn svg {
+  width: 12px;
+  height: 12px;
 }
 
 /* Markdown */

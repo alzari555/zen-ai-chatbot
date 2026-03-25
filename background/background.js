@@ -303,7 +303,18 @@
       let actualModel = config.compressorModel;
       if (isOpenRouter) actualModel = config.compressorModel.replace("openrouter:", "");
 
-      const systemPrompt = "You are a highly efficient text compressor and summarizer. Please take the following raw web page content and produce a highly compressed, dense summary. Retain all hard facts, key concepts, instructions, and context necessary for an AI assistant to answer questions about this page. Output ONLY the summary text.";
+      const systemPrompt = `You are an AI data extractor. Perform a LINEAR FACT MAPPING of the provided text.
+      Your goal is to produce a HIGH-FIDELITY documentation of every factual detail while STRIPPING 100% of the linguistic overhead (grammar, connectors, decoration).
+      
+      CRITICAL RULES:
+      1. TELEGRAPHIC DATA: Extract raw nouns, proper names, dates, numerical figures, and specific events found in every paragraph. 
+      2. ZERO FILLER: Delete all articles, prepositions, pronouns, conjunctions, and general verbs.
+      3. HIGH DENSITY: For long pages, your output MUST be massive (targeting 2000-4000 tokens of pure data). Do not skip sections. 
+      4. LINEAR PROCESSING: Map the document from start to finish linearly.
+      5. FORMAT: Use a dense stream of facts separated by pipes (|). 
+      Input example: "The Argentine Declaration of Independence was a statement adopted on 9 July 1816."
+      Output example: "|IndependenceArgentine9Jul1816|".
+      Output ONLY the raw data stream. No human sentences.`;
 
       let summaryText = "";
       const streamCallback = (chunk) => { summaryText += chunk; };
